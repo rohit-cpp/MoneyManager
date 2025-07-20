@@ -1,16 +1,20 @@
 package com.example.EPQLProject.service;
 
+import com.example.EPQLProject.dto.AuthDto;
 import com.example.EPQLProject.dto.ProfileDto;
 import com.example.EPQLProject.entity.ProfileEntity;
 import com.example.EPQLProject.repository.ProfileRepository;
+import com.example.EPQLProject.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Profile;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -19,6 +23,9 @@ public class ProfileService {
   private final ProfileRepository profileRepository;
   private final EmailService emailService;
   private final PasswordEncoder passwordEncoder;
+  private final AuthenticationManager authenticationManager;
+  private final JwtUtil jwtUtil;
+
 
   public ProfileDto registerProfile(ProfileDto profileDTO){
       ProfileEntity newProfile = toEntity(profileDTO);
@@ -66,7 +73,7 @@ public boolean isAccountActive(String email){
 }
  public ProfileEntity getCurrentProfile(){
      Authentication authentication =  SecurityContextHolder.getContext().getAuthentication();
-     String email = authentication.getName();
+//     String email = authentication.getName();
      return profileRepository.findByEmail(authentication.getName())
              .orElseThrow(()-> new UsernameNotFoundException("Profile not found with email: " + authentication.getName()));
  }
@@ -88,4 +95,17 @@ public boolean isAccountActive(String email){
               .updatedAt(currentUser.getCreatedAt())
               .build();
  }
+ public Map<String, Object> authenticateAndGenerateToken(AuthDto authDto){
+      try{
+         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authDto.getEmail(), authDto.getPassword()));
+       String token = jwtUtil.generateToken(authDto.getEmail());
+         return Map.of(
+                 "token", token,
+                 "user", getPublicProfile(authDto.getEmail())
+         );
+      } catch (Exception e) {
+          throw new RuntimeException("Invalid email or password");
+      }
+ }
+
 }
