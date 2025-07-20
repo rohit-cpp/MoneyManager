@@ -5,6 +5,10 @@ import com.example.EPQLProject.entity.ProfileEntity;
 import com.example.EPQLProject.repository.ProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -14,10 +18,12 @@ import java.util.UUID;
 public class ProfileService {
   private final ProfileRepository profileRepository;
   private final EmailService emailService;
+  private final PasswordEncoder passwordEncoder;
 
   public ProfileDto registerProfile(ProfileDto profileDTO){
       ProfileEntity newProfile = toEntity(profileDTO);
       newProfile.setActivationToken(UUID.randomUUID().toString());
+
       newProfile = profileRepository.save(newProfile);
       String activationLink = "http://localhost:8080/api/v1.0/activate?token=" + newProfile.getActivationToken();
       String subject = "Activate your Money Manager Account";
@@ -30,7 +36,7 @@ public class ProfileService {
               .id(profileDto.getId())
               .fullName(profileDto.getFullName())
               .email(profileDto.getEmail())
-              .password(profileDto.getPassword())
+              .password(passwordEncoder.encode(profileDto.getPassword()))
               .profileImageUrl(profileDto.getProfileImageUrl())
               .createdAt(profileDto.getCreatedAt())
               .updatedAt(profileDto.getUpdatedAt())
@@ -54,4 +60,32 @@ public boolean activateProfile(String activationToken){
           return true;
       }).orElse(false);
 }
+public boolean isAccountActive(String email){
+      return profileRepository.findByEmail(email)
+              .map(ProfileEntity::getIsActive).orElse(false);
+}
+ public ProfileEntity getCurrentProfile(){
+     Authentication authentication =  SecurityContextHolder.getContext().getAuthentication();
+     String email = authentication.getName();
+     return profileRepository.findByEmail(authentication.getName())
+             .orElseThrow(()-> new UsernameNotFoundException("Profile not found with email: " + authentication.getName()));
+ }
+ public ProfileDto getPublicProfile(String email){
+      ProfileEntity currentUser = null;
+      if (email == null){
+          getCurrentProfile();
+      }
+      else {
+          currentUser = profileRepository.findByEmail(email)
+                  .orElseThrow(()->new UsernameNotFoundException("Profile not found with email: "+ email));
+      }
+      return ProfileDto.builder()
+              .id(currentUser.getId())
+              .fullName(currentUser.getFullName())
+              .email(currentUser.getEmail())
+              .profileImageUrl(currentUser.getProfileImageUrl())
+              .createdAt(currentUser.getCreatedAt())
+              .updatedAt(currentUser.getCreatedAt())
+              .build();
+ }
 }
